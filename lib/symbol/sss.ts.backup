@@ -1,0 +1,237 @@
+/**
+ * SSS Extension 統合レイヤー
+ *
+ * 設計方針:
+ * - SSS Extension (sss-module) の関数を薄くラップ
+ * - エラーハンドリングを統一
+ * - テスト時のモック差し替えを容易にする
+ * - IMPLEMENTATION_RULES.mdに従い、requestSignTransaction のみ使用
+ *   （requestSignCosignatureTransaction は使用しない）
+ */
+
+import {
+  isAllowedSSS,
+  getActiveAddress,
+  getActivePublicKey,
+  setTransactionByPayload,
+  requestSignTransaction,
+} from 'sss-module';
+import { ERROR_CODES, ERROR_MESSAGES } from '@/constants';
+import { AppError } from '@/types';
+
+/**
+ * SSS Extensionの利用可能性をチェック
+ */
+export function checkSSSAvailability(): {
+  available: boolean;
+  error?: AppError;
+} {
+  try {
+    const allowed = isAllowedSSS();
+
+    if (!allowed) {
+      return {
+        available: false,
+        error: {
+          code: ERROR_CODES.SSS_NOT_ALLOWED,
+          message: ERROR_MESSAGES[ERROR_CODES.SSS_NOT_ALLOWED],
+        },
+      };
+    }
+
+    return { available: true };
+  } catch (error) {
+    return {
+      available: false,
+      error: {
+        code: ERROR_CODES.SSS_NOT_INSTALLED,
+        message: ERROR_MESSAGES[ERROR_CODES.SSS_NOT_INSTALLED],
+        details: error instanceof Error ? error.message : '不明なエラー',
+      },
+    };
+  }
+}
+
+/**
+ * アクティブなアカウントアドレスを取得
+ */
+export function getSSSAddress(): {
+  address: string | null;
+  error?: AppError;
+} {
+  try {
+    const availability = checkSSSAvailability();
+    if (!availability.available) {
+      return { address: null, error: availability.error };
+    }
+
+    const address = getActiveAddress();
+
+    if (!address) {
+      return {
+        address: null,
+        error: {
+          code: ERROR_CODES.SSS_NO_ACTIVE_ACCOUNT,
+          message: ERROR_MESSAGES[ERROR_CODES.SSS_NO_ACTIVE_ACCOUNT],
+        },
+      };
+    }
+
+    return { address };
+  } catch (error) {
+    return {
+      address: null,
+      error: {
+        code: ERROR_CODES.SSS_NO_ACTIVE_ACCOUNT,
+        message: ERROR_MESSAGES[ERROR_CODES.SSS_NO_ACTIVE_ACCOUNT],
+        details: error instanceof Error ? error.message : '不明なエラー',
+      },
+    };
+  }
+}
+
+/**
+ * アクティブなアカウントの公開鍵を取得
+ */
+export function getSSSPublicKey(): {
+  publicKey: string | null;
+  error?: AppError;
+} {
+  try {
+    const availability = checkSSSAvailability();
+    if (!availability.available) {
+      return { publicKey: null, error: availability.error };
+    }
+
+    const publicKey = getActivePublicKey();
+
+    if (!publicKey) {
+      return {
+        publicKey: null,
+        error: {
+          code: ERROR_CODES.SSS_NO_ACTIVE_ACCOUNT,
+          message: ERROR_MESSAGES[ERROR_CODES.SSS_NO_ACTIVE_ACCOUNT],
+        },
+      };
+    }
+
+    return { publicKey };
+  } catch (error) {
+    return {
+      publicKey: null,
+      error: {
+        code: ERROR_CODES.SSS_NO_ACTIVE_ACCOUNT,
+        message: ERROR_MESSAGES[ERROR_CODES.SSS_NO_ACTIVE_ACCOUNT],
+        details: error instanceof Error ? error.message : '不明なエラー',
+      },
+    };
+  }
+}
+
+/**
+ * SSSアカウント情報を取得
+ */
+export function getSSSAccountInfo(): {
+  address: string;
+  publicKey: string;
+} | null {
+  const addressResult = getSSSAddress();
+  const publicKeyResult = getSSSPublicKey();
+
+  if (!addressResult.address || !publicKeyResult.publicKey) {
+    return null;
+  }
+
+  return {
+    address: addressResult.address,
+    publicKey: publicKeyResult.publicKey,
+  };
+}
+
+/**
+ * トランザクションに署名を要求
+ * 注意: TransferTransactionのみを使用（AggregateTransaction/Cosignatureは使用しない）
+ *
+ * @param payload - トランザクションペイロード（16進数文字列）
+ * @returns 署名結果
+ */
+export async function signTransactionWithSSS(payload: string): Promise<{
+  success: boolean;
+  signedTransaction?: any;
+  error?: AppError;
+}> {
+  try {
+    // SSS Extensionの利用可能性チェック
+    const availability = checkSSSAvailability();
+    if (!availability.available) {
+      return { success: false, error: availability.error };
+    }
+
+    // トランザクションペイロードをセット
+    setTransactionByPayload(payload);
+
+    // 署名を要求（TransferTransaction用）
+    // 重要: requestSignCosignatureTransaction は使用しない
+    const signedTx = await requestSignTransaction();
+
+    if (!signedTx) {
+      return {
+        success: false,
+        error: {
+          code: ERROR_CODES.SSS_SIGN_REJECTED,
+          message: ERROR_MESSAGES[ERROR_CODES.SSS_SIGN_REJECTED],
+        },
+      };
+    }
+
+    return {
+      success: true,
+      signedTransaction: signedTx,
+    };
+  } catch (error) {
+    console.error('SSS署名エラー:', error);
+
+    // ユーザーがキャンセルした場合
+    if (error instanceof Error && error.message.includes('cancel')) {
+      return {
+        success: false,
+        error: {
+          code: ERROR_CODES.SSS_SIGN_REJECTED,
+          message: ERROR_MESSAGES[ERROR_CODES.SSS_SIGN_REJECTED],
+        },
+      };
+    }
+
+    return {
+      success: false,
+      error: {
+        code: ERROR_CODES.SSS_SIGN_REJECTED,
+        message: '署名処理に失敗しました',
+        details: error instanceof Error ? error.message : '不明なエラー',
+      },
+    };
+  }
+}
+
+/**
+ * SSS Extension接続状態を確認（デバッグ用）
+ */
+export function debugSSSStatus(): void {
+  console.log('=== SSS Extension Status ===');
+
+  const availability = checkSSSAvailability();
+  console.log('利用可能:', availability.available);
+
+  if (!availability.available) {
+    console.log('エラー:', availability.error);
+    return;
+  }
+
+  const address = getSSSAddress();
+  console.log('アドレス:', address.address || 'なし');
+
+  const publicKey = getSSSPublicKey();
+  console.log('公開鍵:', publicKey.publicKey || 'なし');
+
+  console.log('===========================');
+}

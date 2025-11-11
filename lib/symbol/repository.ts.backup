@@ -1,0 +1,143 @@
+/**
+ * Symbol Repository 初期化と管理
+ *
+ * 設計方針:
+ * - Symbol SDKのRepositoryFactoryを薄くラップ
+ * - 接続エラーを適切にハンドリング
+ * - テスト時のモック差し替えを容易にする
+ */
+
+import { RepositoryFactoryHttp, NetworkType } from 'symbol-sdk';
+import { getValidatedConfig, SymbolNetworkConfig } from './config';
+
+let repositoryFactory: RepositoryFactoryHttp | null = null;
+let currentConfig: SymbolNetworkConfig | null = null;
+
+/**
+ * RepositoryFactoryを初期化
+ */
+export function initializeRepository(config?: SymbolNetworkConfig): RepositoryFactoryHttp {
+  const networkConfig = config || getValidatedConfig();
+
+  // 既に同じ設定で初期化済みの場合は再利用
+  if (
+    repositoryFactory &&
+    currentConfig &&
+    currentConfig.nodeUrl === networkConfig.nodeUrl
+  ) {
+    return repositoryFactory;
+  }
+
+  try {
+    repositoryFactory = new RepositoryFactoryHttp(networkConfig.nodeUrl);
+    currentConfig = networkConfig;
+    console.log(`Symbol Repositoryを初期化しました: ${networkConfig.nodeUrl}`);
+    return repositoryFactory;
+  } catch (error) {
+    console.error('Repository初期化エラー:', error);
+    throw new Error('Symbolノードへの接続に失敗しました');
+  }
+}
+
+/**
+ * 初期化済みのRepositoryFactoryを取得
+ */
+export function getRepository(): RepositoryFactoryHttp {
+  if (!repositoryFactory) {
+    return initializeRepository();
+  }
+  return repositoryFactory;
+}
+
+/**
+ * ネットワーク情報を取得
+ */
+export async function getNetworkInfo(): Promise<{
+  networkType: NetworkType;
+  generationHash: string;
+  epochAdjustment: number;
+}> {
+  try {
+    const repository = getRepository();
+    const networkRepo = repository.createNetworkRepository();
+    const networkType = await networkRepo.getNetworkType().toPromise();
+
+    const nodeRepo = repository.createNodeRepository();
+    const nodeInfo = await nodeRepo.getNodeInfo().toPromise();
+
+    const config = getValidatedConfig();
+
+    return {
+      networkType,
+      generationHash: nodeInfo.networkGenerationHashSeed,
+      epochAdjustment: config.epochAdjustment,
+    };
+  } catch (error) {
+    console.error('ネットワーク情報取得エラー:', error);
+    throw new Error('ネットワーク情報の取得に失敗しました');
+  }
+}
+
+/**
+ * ノード接続をテスト
+ */
+export async function testNodeConnection(): Promise<{
+  connected: boolean;
+  nodeUrl: string;
+  error?: string;
+}> {
+  const config = getValidatedConfig();
+
+  try {
+    const repository = getRepository();
+    const nodeRepo = repository.createNodeRepository();
+    const nodeInfo = await nodeRepo.getNodeInfo().toPromise();
+
+    return {
+      connected: true,
+      nodeUrl: config.nodeUrl,
+    };
+  } catch (error) {
+    return {
+      connected: false,
+      nodeUrl: config.nodeUrl,
+      error: error instanceof Error ? error.message : '不明なエラー',
+    };
+  }
+}
+
+/**
+ * トランザクションRepositoryを取得
+ */
+export function getTransactionRepository() {
+  return getRepository().createTransactionRepository();
+}
+
+/**
+ * チェーンRepositoryを取得
+ */
+export function getChainRepository() {
+  return getRepository().createChainRepository();
+}
+
+/**
+ * アカウントRepositoryを取得
+ */
+export function getAccountRepository() {
+  return getRepository().createAccountRepository();
+}
+
+/**
+ * リスナーを作成
+ */
+export function createListener() {
+  return getRepository().createListener();
+}
+
+/**
+ * Repositoryをリセット（テスト用）
+ */
+export function resetRepository(): void {
+  repositoryFactory = null;
+  currentConfig = null;
+}

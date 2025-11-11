@@ -1,0 +1,189 @@
+/**
+ * Symbol トランザクション作成
+ *
+ * 設計方針:
+ * - TransferTransactionのみを使用（DAOのAggregateは使用しない）
+ * - 自分宛のメッセージトランザクションで学習記録を保存
+ * - トランザクション作成ロジックを分離し、テスト・デバッグを容易にする
+ */
+
+import {
+  TransferTransaction,
+  Deadline,
+  Address,
+  PlainMessage,
+  UInt64,
+  NetworkType,
+} from 'symbol-sdk';
+import { getValidatedConfig } from './config';
+import { getNetworkInfo } from './repository';
+import { BrowsingSession } from '@/types';
+import { generateRecordMessage } from '@/lib/detection/autoDetect';
+
+/**
+ * トランザクション作成パラメータ
+ */
+export interface CreateTransactionParams {
+  recipientAddress: string; // 受信者アドレス（通常は自分自身）
+  message: string; // トランザクションメッセージ
+  networkType?: NetworkType;
+  epochAdjustment?: number;
+}
+
+/**
+ * 学習記録用TransferTransactionを作成
+ *
+ * @param session - 学習セッション
+ * @param signerAddress - 署名者アドレス（自分のアドレス）
+ * @returns 作成されたTransferTransaction
+ */
+export async function createLearningRecordTransaction(
+  session: BrowsingSession,
+  signerAddress: string
+): Promise<TransferTransaction> {
+  // 学習記録をJSON形式のメッセージに変換
+  const message = generateRecordMessage(session);
+
+  // 自分宛のトランザクションを作成
+  return await createTransferTransaction({
+    recipientAddress: signerAddress,
+    message,
+  });
+}
+
+/**
+ * TransferTransactionを作成（汎用）
+ *
+ * @param params - トランザクション作成パラメータ
+ * @returns 作成されたTransferTransaction
+ */
+export async function createTransferTransaction(
+  params: CreateTransactionParams
+): Promise<TransferTransaction> {
+  const config = getValidatedConfig();
+
+  // ネットワーク情報を取得
+  let networkType: NetworkType;
+  let epochAdjustment: number;
+
+  if (params.networkType && params.epochAdjustment) {
+    // パラメータで指定された場合はそれを使用（テスト用）
+    networkType = params.networkType;
+    epochAdjustment = params.epochAdjustment;
+  } else {
+    // ノードから取得
+    const networkInfo = await getNetworkInfo();
+    networkType = networkInfo.networkType;
+    epochAdjustment = networkInfo.epochAdjustment;
+  }
+
+  // デッドライン作成
+  const deadline = Deadline.create(epochAdjustment, config.deadlineHours);
+
+  // 受信者アドレス作成
+  const recipientAddress = Address.createFromRawAddress(params.recipientAddress);
+
+  // メッセージ作成（プレーンメッセージ）
+  const message = PlainMessage.create(params.message);
+
+  // TransferTransaction作成
+  // モザイク配列は空（XYMの送信なし、メッセージのみ）
+  const transaction = TransferTransaction.create(
+    deadline,
+    recipientAddress,
+    [], // モザイク配列（空 = 送金なし）
+    message,
+    networkType,
+    UInt64.fromUint(config.maxFee) // 最大手数料
+  );
+
+  return transaction;
+}
+
+/**
+ * トランザクションペイロードを取得
+ * SSS Extensionに渡すためのシリアライズされたトランザクション
+ *
+ * @param transaction - TransferTransaction
+ * @returns ペイロード（16進数文字列）
+ */
+export function getTransactionPayload(transaction: TransferTransaction): string {
+  return transaction.serialize();
+}
+
+/**
+ * トランザクション情報を表示用にフォーマット
+ *
+ * @param transaction - TransferTransaction
+ * @returns フォーマットされた情報オブジェクト
+ */
+export function formatTransactionInfo(transaction: TransferTransaction): {
+  type: string;
+  recipient: string;
+  message: string;
+  maxFee: string;
+  deadline: string;
+  size: number;
+} {
+  return {
+    type: 'TransferTransaction',
+    recipient: transaction.recipientAddress.plain(),
+    message: transaction.message.payload,
+    maxFee: transaction.maxFee.toString(),
+    deadline: transaction.deadline.toString(),
+    size: transaction.size,
+  };
+}
+
+/**
+ * トランザクションハッシュを計算
+ * 注意: 署名前のトランザクションではハッシュは計算できません
+ * 署名後にSSS Extensionから返されるハッシュを使用してください
+ *
+ * @param transaction - 署名済みTransferTransaction
+ * @param generationHash - ネットワークのジェネレーションハッシュ
+ * @param signerPublicKey - 署名者の公開鍵
+ * @returns トランザクションハッシュ
+ */
+export function calculateTransactionHash(
+  transaction: TransferTransaction,
+  generationHash: string,
+  signerPublicKey: string
+): string {
+  // TransactionのtoAggregateを使用してハッシュ計算
+  // 実際のハッシュはSSS Extensionから返される値を使用することを推奨
+  console.warn('トランザクションハッシュの計算は署名後に行うことを推奨します');
+  return transaction.transactionInfo?.hash || '';
+}
+
+/**
+ * トランザクション作成のバリデーション
+ */
+export function validateTransactionParams(params: CreateTransactionParams): {
+  isValid: boolean;
+  errors: string[];
+} {
+  const errors: string[] = [];
+
+  // アドレスの検証
+  try {
+    Address.createFromRawAddress(params.recipientAddress);
+  } catch (error) {
+    errors.push('無効な受信者アドレス');
+  }
+
+  // メッセージの検証（最大1024バイト）
+  const messageBytes = new TextEncoder().encode(params.message).length;
+  if (messageBytes > 1024) {
+    errors.push(`メッセージが長すぎます（${messageBytes}バイト > 1024バイト）`);
+  }
+
+  if (params.message.length === 0) {
+    errors.push('メッセージが空です');
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+}

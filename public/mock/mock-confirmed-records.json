@@ -1,0 +1,65 @@
+[
+  {
+    "id": "record-001",
+    "session": {
+      "id": "session-001",
+      "url": "https://www.youtube.com/watch?v=example1",
+      "title": "Next.js 14 チュートリアル - App Routerの基礎",
+      "startTime": "2024-01-15T10:00:00.000Z",
+      "endTime": "2024-01-15T10:45:00.000Z",
+      "duration": 2700000,
+      "contentHash": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6",
+      "metadata": {
+        "description": "Next.js 14の新機能App Routerについて学習",
+        "keywords": ["Next.js", "React", "App Router", "チュートリアル"]
+      }
+    },
+    "transactionHash": "ABC123DEF456GHI789JKL012MNO345PQR678STU901VWX234YZ567890ABCD",
+    "blockHeight": 1234567,
+    "timestamp": "2024-01-15T10:50:00.000Z",
+    "signerAddress": "TBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "verified": true
+  },
+  {
+    "id": "record-002",
+    "session": {
+      "id": "session-002",
+      "url": "https://github.com/vercel/next.js/discussions/example",
+      "title": "Next.js Server Components ディスカッション",
+      "startTime": "2024-01-15T14:00:00.000Z",
+      "endTime": "2024-01-15T14:30:00.000Z",
+      "duration": 1800000,
+      "contentHash": "b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7",
+      "metadata": {
+        "description": "Server Componentsの実装パターンについてのディスカッション",
+        "keywords": ["Server Components", "RSC", "Next.js", "React"]
+      }
+    },
+    "transactionHash": "DEF456GHI789JKL012MNO345PQR678STU901VWX234YZ567890ABCDEF123GHI",
+    "blockHeight": 1234890,
+    "timestamp": "2024-01-15T14:35:00.000Z",
+    "signerAddress": "TBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "verified": true
+  },
+  {
+    "id": "record-003",
+    "session": {
+      "id": "session-003",
+      "url": "https://www.udemy.com/course/typescript-complete-guide",
+      "title": "TypeScript完全ガイド - 型安全なコード開発",
+      "startTime": "2024-01-16T09:00:00.000Z",
+      "endTime": "2024-01-16T10:15:00.000Z",
+      "duration": 4500000,
+      "contentHash": "c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8",
+      "metadata": {
+        "description": "TypeScriptの高度な型システムについて学習",
+        "keywords": ["TypeScript", "型システム", "ジェネリクス", "ユニオン型"]
+      }
+    },
+    "transactionHash": "GHI789JKL012MNO345PQR678STU901VWX234YZ567890ABCDEF123GHI456JKL",
+    "blockHeight": 1235123,
+    "timestamp": "2024-01-16T10:20:00.000Z",
+    "signerAddress": "TBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "verified": true
+  }
+]

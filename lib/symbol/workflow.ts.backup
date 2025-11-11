@@ -1,0 +1,260 @@
+/**
+ * 学習記録送信ワークフロー
+ *
+ * 設計方針:
+ * - トランザクション作成→署名→送信→確認の一連の流れを統合
+ * - エラーハンドリングとリトライロジックを含む
+ * - 各ステップの状態を明確にする
+ */
+
+import { BrowsingSession, ConfirmedRecord, AppError } from '@/types';
+import { createLearningRecordTransaction, getTransactionPayload } from './transaction';
+import { getSSSAddress, signTransactionWithSSS } from './sss';
+import { announceTransaction, waitForTransactionConfirmation } from './submit';
+import { addConfirmedRecord } from '@/lib/storage/localStorage';
+import { removePendingRecordById } from '@/lib/detection/pendingRecords';
+
+/**
+ * 送信結果
+ */
+export interface SubmitResult {
+  success: boolean;
+  step:
+    | 'init'
+    | 'create_tx'
+    | 'sign_tx'
+    | 'announce_tx'
+    | 'confirm_tx'
+    | 'save_record'
+    | 'completed';
+  transactionHash?: string;
+  confirmedRecord?: ConfirmedRecord;
+  error?: AppError;
+}
+
+/**
+ * 学習記録をブロックチェーンに送信（完全なワークフロー）
+ *
+ * @param session - 学習セッション
+ * @param pendingRecordId - 保留中レコードID（削除用）
+ * @param onProgress - 進捗コールバック（オプション）
+ * @returns 送信結果
+ */
+export async function submitLearningRecord(
+  session: BrowsingSession,
+  pendingRecordId: string,
+  onProgress?: (step: SubmitResult['step'], message: string) => void
+): Promise<SubmitResult> {
+  let currentStep: SubmitResult['step'] = 'init';
+
+  try {
+    // ステップ1: SSSアドレス取得
+    onProgress?.('init', 'SSS Extensionからアドレスを取得中...');
+    const addressResult = getSSSAddress();
+    if (!addressResult.address) {
+      return {
+        success: false,
+        step: 'init',
+        error: addressResult.error,
+      };
+    }
+    const signerAddress = addressResult.address;
+
+    // ステップ2: トランザクション作成
+    currentStep = 'create_tx';
+    onProgress?.(currentStep, 'トランザクションを作成中...');
+    const transaction = await createLearningRecordTransaction(
+      session,
+      signerAddress
+    );
+    const payload = getTransactionPayload(transaction);
+
+    // ステップ3: SSS Extensionで署名
+    currentStep = 'sign_tx';
+    onProgress?.(currentStep, 'SSS Extensionで署名を要求中...');
+    const signResult = await signTransactionWithSSS(payload);
+    if (!signResult.success || !signResult.signedTransaction) {
+      return {
+        success: false,
+        step: currentStep,
+        error: signResult.error,
+      };
+    }
+    const signedTransaction = signResult.signedTransaction;
+
+    // ステップ4: トランザクションをアナウンス
+    currentStep = 'announce_tx';
+    onProgress?.(currentStep, 'トランザクションを送信中...');
+    const announceResult = await announceTransaction(signedTransaction);
+    if (!announceResult.success || !announceResult.transactionHash) {
+      return {
+        success: false,
+        step: currentStep,
+        error: announceResult.error,
+      };
+    }
+    const transactionHash = announceResult.transactionHash;
+
+    // ステップ5: トランザクション確認
+    currentStep = 'confirm_tx';
+    onProgress?.(currentStep, 'トランザクションの確認を待機中...');
+    const confirmResult = await waitForTransactionConfirmation(transactionHash);
+    if (!confirmResult.confirmed || !confirmResult.transactionInfo) {
+      return {
+        success: false,
+        step: currentStep,
+        transactionHash,
+        error: confirmResult.error,
+      };
+    }
+
+    // ステップ6: 確定済みレコードを保存
+    currentStep = 'save_record';
+    onProgress?.(currentStep, '確定済みレコードを保存中...');
+    const confirmedRecord: ConfirmedRecord = {
+      id: pendingRecordId, // 保留中レコードと同じIDを使用
+      session,
+      transactionHash,
+      blockHeight: confirmResult.transactionInfo.blockHeight,
+      timestamp: confirmResult.transactionInfo.timestamp,
+      signerAddress,
+      verified: true,
+    };
+
+    const saveSuccess = addConfirmedRecord(confirmedRecord);
+    if (!saveSuccess) {
+      console.warn('確定済みレコードの保存に失敗しましたが、処理は継続します');
+    }
+
+    // 保留中レコードを削除
+    removePendingRecordById(pendingRecordId);
+
+    // ステップ7: 完了
+    currentStep = 'completed';
+    onProgress?.(currentStep, '送信完了');
+
+    return {
+      success: true,
+      step: currentStep,
+      transactionHash,
+      confirmedRecord,
+    };
+  } catch (error) {
+    console.error('学習記録送信エラー:', error);
+
+    return {
+      success: false,
+      step: currentStep,
+      error: {
+        code: 'SUBMIT_FAILED',
+        message: '学習記録の送信に失敗しました',
+        details: error instanceof Error ? error.message : '不明なエラー',
+      },
+    };
+  }
+}
+
+/**
+ * リトライ付き送信
+ *
+ * @param session - 学習セッション
+ * @param pendingRecordId - 保留中レコードID
+ * @param maxRetries - 最大リトライ回数
+ * @param onProgress - 進捗コールバック
+ * @returns 送信結果
+ */
+export async function submitLearningRecordWithRetry(
+  session: BrowsingSession,
+  pendingRecordId: string,
+  maxRetries: number = 3,
+  onProgress?: (step: SubmitResult['step'], message: string) => void
+): Promise<SubmitResult> {
+  let lastResult: SubmitResult | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    if (attempt > 1) {
+      onProgress?.(
+        'init',
+        `リトライ中... (${attempt}/${maxRetries}回目)`
+      );
+      // リトライ前に少し待機
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    lastResult = await submitLearningRecord(
+      session,
+      pendingRecordId,
+      onProgress
+    );
+
+    // 成功した場合は即座に返す
+    if (lastResult.success) {
+      return lastResult;
+    }
+
+    // ユーザーがキャンセルした場合はリトライしない
+    if (lastResult.error?.code === 'SSS_SIGN_REJECTED') {
+      return lastResult;
+    }
+
+    // SSS Extensionがインストールされていない場合はリトライしない
+    if (
+      lastResult.error?.code === 'SSS_NOT_INSTALLED' ||
+      lastResult.error?.code === 'SSS_NOT_ALLOWED'
+    ) {
+      return lastResult;
+    }
+  }
+
+  // 最大リトライ回数に達した
+  return (
+    lastResult || {
+      success: false,
+      step: 'init',
+      error: {
+        code: 'MAX_RETRIES_EXCEEDED',
+        message: '最大リトライ回数に達しました',
+      },
+    }
+  );
+}
+
+/**
+ * バッチ送信（複数レコードを順次送信）
+ *
+ * @param records - 送信する学習セッションと保留中レコードIDのペア
+ * @param onProgress - 進捗コールバック
+ * @returns 送信結果の配列
+ */
+export async function submitMultipleRecords(
+  records: Array<{ session: BrowsingSession; pendingRecordId: string }>,
+  onProgress?: (
+    index: number,
+    total: number,
+    step: SubmitResult['step'],
+    message: string
+  ) => void
+): Promise<SubmitResult[]> {
+  const results: SubmitResult[] = [];
+
+  for (let i = 0; i < records.length; i++) {
+    const { session, pendingRecordId } = records[i];
+
+    const result = await submitLearningRecord(
+      session,
+      pendingRecordId,
+      (step, message) => {
+        onProgress?.(i + 1, records.length, step, message);
+      }
+    );
+
+    results.push(result);
+
+    // 失敗した場合は次のレコードに進む前に少し待機
+    if (!result.success) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+
+  return results;
+}

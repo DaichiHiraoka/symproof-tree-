@@ -1,0 +1,264 @@
+/**
+ * トランザクション送信・確認機能
+ *
+ * 設計方針:
+ * - トランザクションのアナウンスと確認を分離
+ * - エラーハンドリングを明確にする
+ * - リトライロジックは別ファイルで実装
+ */
+
+import { TransferTransaction, SignedTransaction } from 'symbol-sdk';
+import { getTransactionRepository, getNetworkInfo } from './repository';
+import { ERROR_CODES, ERROR_MESSAGES } from '@/constants';
+import { AppError, TransactionInfo } from '@/types';
+
+/**
+ * 署名済みトランザクションをアナウンス
+ *
+ * @param signedTransaction - SSS Extensionで署名されたトランザクション
+ * @returns アナウンス結果
+ */
+export async function announceTransaction(
+  signedTransaction: SignedTransaction
+): Promise<{
+  success: boolean;
+  transactionHash?: string;
+  error?: AppError;
+}> {
+  try {
+    const transactionRepo = getTransactionRepository();
+
+    // トランザクションをアナウンス
+    await transactionRepo.announce(signedTransaction).toPromise();
+
+    return {
+      success: true,
+      transactionHash: signedTransaction.hash,
+    };
+  } catch (error) {
+    console.error('トランザクションアナウンスエラー:', error);
+
+    return {
+      success: false,
+      error: {
+        code: ERROR_CODES.TRANSACTION_FAILED,
+        message: ERROR_MESSAGES[ERROR_CODES.TRANSACTION_FAILED],
+        details: error instanceof Error ? error.message : '不明なエラー',
+      },
+    };
+  }
+}
+
+/**
+ * トランザクションの確認（承認待ち）
+ *
+ * @param transactionHash - トランザクションハッシュ
+ * @param timeoutMs - タイムアウト時間（ミリ秒）
+ * @returns 確認結果
+ */
+export async function waitForTransactionConfirmation(
+  transactionHash: string,
+  timeoutMs: number = 60000 // デフォルト60秒
+): Promise<{
+  confirmed: boolean;
+  transactionInfo?: TransactionInfo;
+  error?: AppError;
+}> {
+  try {
+    const transactionRepo = getTransactionRepository();
+    const networkInfo = await getNetworkInfo();
+
+    // タイムアウト処理
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('トランザクション確認がタイムアウトしました'));
+      }, timeoutMs);
+    });
+
+    // トランザクション情報を取得（ポーリング）
+    const confirmationPromise = new Promise<TransactionInfo>(
+      async (resolve, reject) => {
+        const maxAttempts = Math.floor(timeoutMs / 3000); // 3秒ごとにポーリング
+        let attempts = 0;
+
+        const poll = async () => {
+          try {
+            const tx = await transactionRepo
+              .getTransaction(transactionHash, 'confirmed')
+              .toPromise();
+
+            if (tx && tx.transactionInfo && tx.transactionInfo.height) {
+              // 確定済み
+              const info: TransactionInfo = {
+                hash: transactionHash,
+                signerAddress: tx.signer?.address.plain() || '',
+                message:
+                  (tx as any).message?.payload || '', // TransferTransactionの場合
+                blockHeight: tx.transactionInfo.height.compact(),
+                timestamp: new Date(),
+              };
+
+              resolve(info);
+              return;
+            }
+          } catch (error) {
+            // まだ承認されていない場合はエラーになる
+          }
+
+          attempts++;
+          if (attempts >= maxAttempts) {
+            reject(new Error('トランザクションが承認されませんでした'));
+            return;
+          }
+
+          // 3秒待って再試行
+          setTimeout(poll, 3000);
+        };
+
+        poll();
+      }
+    );
+
+    const transactionInfo = await Promise.race([
+      confirmationPromise,
+      timeoutPromise,
+    ]);
+
+    return {
+      confirmed: true,
+      transactionInfo,
+    };
+  } catch (error) {
+    console.error('トランザクション確認エラー:', error);
+
+    return {
+      confirmed: false,
+      error: {
+        code: ERROR_CODES.TRANSACTION_FAILED,
+        message: 'トランザクションの確認に失敗しました',
+        details: error instanceof Error ? error.message : '不明なエラー',
+      },
+    };
+  }
+}
+
+/**
+ * トランザクションハッシュから情報を取得
+ *
+ * @param transactionHash - トランザクションハッシュ
+ * @returns トランザクション情報
+ */
+export async function getTransactionInfo(
+  transactionHash: string
+): Promise<{
+  found: boolean;
+  transactionInfo?: TransactionInfo;
+  error?: AppError;
+}> {
+  try {
+    const transactionRepo = getTransactionRepository();
+
+    // 確定済みトランザクションから検索
+    const tx = await transactionRepo
+      .getTransaction(transactionHash, 'confirmed')
+      .toPromise();
+
+    if (!tx || !tx.transactionInfo) {
+      return {
+        found: false,
+        error: {
+          code: ERROR_CODES.TRANSACTION_NOT_FOUND,
+          message: ERROR_MESSAGES[ERROR_CODES.TRANSACTION_NOT_FOUND],
+        },
+      };
+    }
+
+    const info: TransactionInfo = {
+      hash: transactionHash,
+      signerAddress: tx.signer?.address.plain() || '',
+      message: (tx as any).message?.payload || '',
+      blockHeight: tx.transactionInfo.height?.compact() || 0,
+      timestamp: new Date(), // 実際のタイムスタンプはブロック情報から取得する必要あり
+    };
+
+    return {
+      found: true,
+      transactionInfo: info,
+    };
+  } catch (error) {
+    console.error('トランザクション情報取得エラー:', error);
+
+    return {
+      found: false,
+      error: {
+        code: ERROR_CODES.TRANSACTION_NOT_FOUND,
+        message: ERROR_MESSAGES[ERROR_CODES.TRANSACTION_NOT_FOUND],
+        details: error instanceof Error ? error.message : '不明なエラー',
+      },
+    };
+  }
+}
+
+/**
+ * トランザクションステータスを取得
+ *
+ * @param transactionHash - トランザクションハッシュ
+ * @returns ステータス
+ */
+export async function getTransactionStatus(transactionHash: string): Promise<{
+  status: 'confirmed' | 'unconfirmed' | 'partial' | 'unknown';
+  error?: AppError;
+}> {
+  try {
+    const transactionRepo = getTransactionRepository();
+
+    // 確定済みをチェック
+    try {
+      const confirmedTx = await transactionRepo
+        .getTransaction(transactionHash, 'confirmed')
+        .toPromise();
+      if (confirmedTx) {
+        return { status: 'confirmed' };
+      }
+    } catch (e) {
+      // 確定済みにない場合は次へ
+    }
+
+    // 未確定をチェック
+    try {
+      const unconfirmedTx = await transactionRepo
+        .getTransaction(transactionHash, 'unconfirmed')
+        .toPromise();
+      if (unconfirmedTx) {
+        return { status: 'unconfirmed' };
+      }
+    } catch (e) {
+      // 未確定にない場合は次へ
+    }
+
+    // 部分トランザクションをチェック
+    try {
+      const partialTx = await transactionRepo
+        .getTransaction(transactionHash, 'partial')
+        .toPromise();
+      if (partialTx) {
+        return { status: 'partial' };
+      }
+    } catch (e) {
+      // どこにもない
+    }
+
+    return { status: 'unknown' };
+  } catch (error) {
+    console.error('トランザクションステータス取得エラー:', error);
+
+    return {
+      status: 'unknown',
+      error: {
+        code: ERROR_CODES.TRANSACTION_NOT_FOUND,
+        message: 'トランザクションステータスの取得に失敗しました',
+        details: error instanceof Error ? error.message : '不明なエラー',
+      },
+    };
+  }
+}
