@@ -1,13 +1,42 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { verifyTransaction, VerificationResult } from '@/lib/symbol/verify';
 import { getValidatedConfig } from '@/lib/symbol/config';
 
-export default function VerifyPage() {
+function VerifyPageContent() {
+  const searchParams = useSearchParams();
   const [txHash, setTxHash] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [result, setResult] = useState<VerificationResult | null>(null);
+
+  useEffect(() => {
+    // URLパラメータからハッシュを取得
+    const hashFromUrl = searchParams.get('hash');
+    if (hashFromUrl) {
+      console.log('🔍 [DEBUG] URLからハッシュを取得:', hashFromUrl);
+      setTxHash(hashFromUrl);
+      // 自動的に検証を実行
+      verifyFromHash(hashFromUrl);
+    }
+  }, [searchParams]);
+
+  const verifyFromHash = async (hash: string) => {
+    console.log('🔍 [DEBUG] verifyFromHash 開始:', hash);
+    setVerifying(true);
+    setResult(null);
+
+    try {
+      const verificationResult = await verifyTransaction(hash.trim());
+      console.log('🔍 [DEBUG] verificationResult:', verificationResult);
+      setResult(verificationResult);
+    } catch (error) {
+      console.error('🔍 [DEBUG] 検証エラー:', error);
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const handleVerify = async () => {
     if (!txHash || txHash.trim().length === 0) {
@@ -18,19 +47,7 @@ export default function VerifyPage() {
     console.log('🔍 [DEBUG] handleVerify 開始');
     console.log('🔍 [DEBUG] txHash:', txHash.trim());
 
-    setVerifying(true);
-    setResult(null);
-
-    try {
-      const verificationResult = await verifyTransaction(txHash.trim());
-      console.log('🔍 [DEBUG] verificationResult:', verificationResult);
-      setResult(verificationResult);
-    } catch (error) {
-      console.error('🔍 [DEBUG] 検証エラー:', error);
-      alert('検証中にエラーが発生しました');
-    } finally {
-      setVerifying(false);
-    }
+    await verifyFromHash(txHash);
   };
 
   const handleClear = () => {
@@ -272,5 +289,17 @@ export default function VerifyPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen p-8 flex items-center justify-center">
+        <p className="text-lg">読み込み中...</p>
+      </div>
+    }>
+      <VerifyPageContent />
+    </Suspense>
   );
 }

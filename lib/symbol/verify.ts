@@ -63,7 +63,7 @@ export async function verifyTransaction(
         valid: false,
         txHash,
         error: {
-          code: ERROR_CODES.INVALID_INPUT,
+          code: ERROR_CODES.VERIFICATION_FAILED,
           message: '無効なトランザクションハッシュです（64文字の16進数である必要があります）',
         },
       };
