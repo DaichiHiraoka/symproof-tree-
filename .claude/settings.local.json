@@ -10,7 +10,9 @@
       "WebFetch(domain:qiita.com)",
       "WebFetch(domain:github.com)",
       "Bash(.env.local)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:atlassian.design)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []

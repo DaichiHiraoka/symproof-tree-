@@ -1,12 +1,50 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { ConfirmedRecord } from '@/types';
 import { getConfirmedRecords } from '@/lib/storage/localStorage';
-import RecordList from '@/components/RecordList';
+import RecordCardAtlaskit from '@/components/RecordCardAtlaskit';
 import { getValidatedConfig } from '@/lib/symbol/config';
+import Button from '@atlaskit/button';
+import Spinner from '@atlaskit/spinner';
+import SectionMessage from '@atlaskit/section-message';
+import Lozenge from '@atlaskit/lozenge';
+import { Box, Stack, Grid, Inline, xcss } from '@atlaskit/primitives';
+import EditorSearchIcon from '@atlaskit/icon/glyph/editor/search';
+import LinkIcon from '@atlaskit/icon/glyph/link';
 
-export default function VerifiedPage() {
+const pageContainerStyles = xcss({
+  paddingBlock: 'space.400',
+  paddingInline: 'space.300',
+  minHeight: '100vh',
+});
+
+const contentContainerStyles = xcss({
+  maxWidth: '1200px',
+  marginInline: 'auto',
+});
+
+const headingStyles = xcss({
+  font: 'font.heading.xlarge',
+  fontWeight: 'font.weight.semibold',
+  marginBlockEnd: 'space.300',
+});
+
+const statCardStyles = xcss({
+  padding: 'space.200',
+  borderRadius: 'border.radius.200',
+  backgroundColor: 'elevation.surface.raised',
+  boxShadow: 'elevation.shadow.raised',
+});
+
+const infoBoxStyles = xcss({
+  padding: 'space.100',
+  backgroundColor: 'color.background.neutral',
+  borderRadius: 'border.radius.100',
+});
+
+export default function VerifiedPageAtlaskit() {
   const [records, setRecords] = useState<ConfirmedRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -20,13 +58,9 @@ export default function VerifiedPage() {
   }, []);
 
   const loadData = () => {
-    console.log('🔍 [DEBUG] loadData 開始');
     const confirmedRecords = getConfirmedRecords();
-    console.log('🔍 [DEBUG] confirmedRecords:', confirmedRecords);
-
     setRecords(confirmedRecords);
 
-    // 統計情報を計算
     const total = confirmedRecords.length;
     const verified = confirmedRecords.filter(r => r.verified).length;
     const unverified = total - verified;
@@ -43,123 +77,144 @@ export default function VerifiedPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen p-8 flex items-center justify-center">
-        <p className="text-lg">読み込み中...</p>
-      </div>
+      <Box xcss={pageContainerStyles}>
+        <Box xcss={contentContainerStyles}>
+          <Inline space="space.100" alignBlock="center">
+            <Spinner size="large" />
+            <span style={{ fontSize: '18px' }}>読み込み中...</span>
+          </Inline>
+        </Box>
+      </Box>
     );
   }
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">確定済みレコード</h1>
+    <Box xcss={pageContainerStyles}>
+      <Box xcss={contentContainerStyles}>
+        <Stack space="space.300">
+          <Box xcss={headingStyles}>確定済みレコード</Box>
 
-        {/* 統計情報 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
-            <p className="text-sm text-gray-600 dark:text-gray-400">合計</p>
-            <p className="text-2xl font-bold">{stats.total}</p>
-          </div>
-          <div className="bg-green-100 dark:bg-green-900/20 p-4 rounded-lg shadow">
-            <p className="text-sm text-gray-600 dark:text-gray-400">検証済み</p>
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.verified}</p>
-          </div>
-          <div className="bg-yellow-100 dark:bg-yellow-900/20 p-4 rounded-lg shadow">
-            <p className="text-sm text-gray-600 dark:text-gray-400">未検証</p>
-            <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.unverified}</p>
-          </div>
-        </div>
-
-        {/* レコード一覧 */}
-        <RecordList
-          records={records}
-          type="confirmed"
-          showActions={true}
-          renderAction={(record) => {
-            const confirmedRecord = record as ConfirmedRecord;
-            return (
-              <div className="space-y-2">
-                {/* トランザクションハッシュ */}
-                <div className="bg-gray-50 dark:bg-gray-700 rounded p-2">
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                    トランザクションハッシュ
-                  </p>
-                  <p className="font-mono text-xs break-all text-gray-900 dark:text-gray-100">
-                    {confirmedRecord.transactionHash}
-                  </p>
-                </div>
-
-                {/* ブロック高 */}
-                <div className="bg-gray-50 dark:bg-gray-700 rounded p-2">
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                    ブロック高
-                  </p>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    {confirmedRecord.blockHeight.toLocaleString()}
-                  </p>
-                </div>
-
-                {/* 検証ステータス */}
-                <div className={`rounded p-2 ${
-                  confirmedRecord.verified
-                    ? 'bg-green-50 dark:bg-green-900/20 border border-green-500'
-                    : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-500'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    <span className={confirmedRecord.verified ? 'text-green-600' : 'text-yellow-600'}>
-                      {confirmedRecord.verified ? '✓' : '○'}
-                    </span>
-                    <span className="text-sm font-medium">
-                      {confirmedRecord.verified ? '検証済み' : '未検証'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* アクションボタン */}
-                <div className="flex gap-2">
-                  <a
-                    href={`/verify?hash=${confirmedRecord.transactionHash}`}
-                    className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition text-center"
-                  >
-                    検証ページで確認
-                  </a>
-                  <a
-                    href={getExplorerUrl(confirmedRecord.transactionHash)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-2 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 transition flex items-center gap-1"
-                  >
-                    <span>Explorer</span>
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </a>
-                </div>
+          {/* 統計情報 */}
+          <Grid gap="space.200" templateColumns="1fr 1fr 1fr">
+            <Box xcss={statCardStyles}>
+              <div style={{ fontSize: '12px', color: '#6B778C', marginBottom: '4px' }}>
+                合計
               </div>
-            );
-          }}
-          emptyMessage="確定済みレコードがありません。保留中レコードをブロックチェーンに登録してください。"
-        />
+              <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                {stats.total}
+              </div>
+            </Box>
 
-        {/* ヘルプセクション */}
-        {records.length === 0 && (
-          <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
-            <h3 className="font-semibold mb-3 text-blue-900 dark:text-blue-300">
-              💡 確定済みレコードについて
-            </h3>
-            <div className="space-y-2 text-sm text-blue-800 dark:text-blue-300">
-              <p>確定済みレコードは、Symbolブロックチェーンに記録された学習記録です。</p>
-              <p className="font-semibold mt-4">確定済みレコードを作成するには:</p>
-              <ol className="list-decimal list-inside space-y-1 ml-2">
-                <li>「保留中」ページに移動</li>
-                <li>レコードの「ブロックチェーンに登録」ボタンをクリック</li>
-                <li>SSS Extensionで署名</li>
-                <li>トランザクションが承認されると、こちらのページに表示されます</li>
-              </ol>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+            <Box xcss={statCardStyles}>
+              <div style={{ fontSize: '12px', color: '#6B778C', marginBottom: '4px' }}>
+                検証済み
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#00875A' }}>
+                {stats.verified}
+              </div>
+            </Box>
+
+            <Box xcss={statCardStyles}>
+              <div style={{ fontSize: '12px', color: '#6B778C', marginBottom: '4px' }}>
+                未検証
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#FF991F' }}>
+                {stats.unverified}
+              </div>
+            </Box>
+          </Grid>
+
+          {/* レコード一覧 */}
+          {records.length === 0 ? (
+            <SectionMessage
+              appearance="information"
+              title="💡 確定済みレコードについて"
+            >
+              <Stack space="space.100">
+                <p>確定済みレコードは、Symbolブロックチェーンに記録された学習記録です。</p>
+
+                <div style={{ marginTop: '12px' }}>
+                  <strong>確定済みレコードを作成するには:</strong>
+                  <ol style={{ marginLeft: '20px', marginTop: '8px' }}>
+                    <li>「保留中」ページに移動</li>
+                    <li>レコードの「ブロックチェーンに登録」ボタンをクリック</li>
+                    <li>SSS Extensionで署名</li>
+                    <li>トランザクションが承認されると、こちらのページに表示されます</li>
+                  </ol>
+                </div>
+              </Stack>
+            </SectionMessage>
+          ) : (
+            <Stack space="space.200">
+              {records.map((record) => (
+                <RecordCardAtlaskit
+                  key={record.id}
+                  session={record.session}
+                  status="confirmed"
+                  timestamp={record.timestamp}
+                  transactionHash={record.transactionHash}
+                  showActions={true}
+                  actionButton={
+                    <Stack space="space.150">
+                      {/* トランザクションハッシュ */}
+                      <Box xcss={infoBoxStyles}>
+                        <div style={{ fontSize: '10px', color: '#6B778C', marginBottom: '4px' }}>
+                          トランザクションハッシュ
+                        </div>
+                        <div style={{ fontSize: '11px', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                          {record.transactionHash}
+                        </div>
+                      </Box>
+
+                      {/* ブロック高 */}
+                      <Box xcss={infoBoxStyles}>
+                        <div style={{ fontSize: '10px', color: '#6B778C', marginBottom: '4px' }}>
+                          ブロック高
+                        </div>
+                        <div style={{ fontSize: '12px', fontWeight: 600 }}>
+                          {record.blockHeight.toLocaleString()}
+                        </div>
+                      </Box>
+
+                      {/* 検証ステータス */}
+                      <Inline space="space.100" alignBlock="center">
+                        <Lozenge appearance={record.verified ? 'success' : 'moved'}>
+                          {record.verified ? '検証済み' : '未検証'}
+                        </Lozenge>
+                      </Inline>
+
+                      {/* アクションボタン */}
+                      <Inline space="space.100">
+                        <Link href={`/verify?hash=${record.transactionHash}`}>
+                          <Button
+                            appearance="primary"
+                            iconBefore={<EditorSearchIcon label="Verify" />}
+                          >
+                            検証ページで確認
+                          </Button>
+                        </Link>
+
+                        <a
+                          href={getExplorerUrl(record.transactionHash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button
+                            appearance="default"
+                            iconBefore={<LinkIcon label="Explorer" />}
+                          >
+                            Explorer
+                          </Button>
+                        </a>
+                      </Inline>
+                    </Stack>
+                  }
+                />
+              ))}
+            </Stack>
+          )}
+        </Stack>
+      </Box>
+    </Box>
   );
 }
