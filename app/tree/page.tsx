@@ -1,19 +1,43 @@
-/**
- * 学習ツリーページ
- * Phase 5で実装予定
- */
+"use client";
+
+import { useEffect, useState } from 'react';
+import type { ConfirmedRecord } from '@/types';
+import { getConfirmedRecords } from '@/lib/storage/localStorage';
+import LearningTreeView from '@/components/LearningTree/LearningTreeView';
 
 export default function TreePage() {
+  const [records, setRecords] = useState<ConfirmedRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const data = getConfirmedRecords();
+    setRecords(data);
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen p-8 flex items-center justify-center">
+        <p className="text-lg">読み込み中...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">学習ツリー</h1>
-        <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-6">
-          <p className="text-lg">このページはPhase 5で実装されます</p>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            学習記録をツリー構造で可視化する機能を実装予定
-          </p>
-        </div>
+
+        {records.length === 0 ? (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+            <p className="text-lg">確定済みレコードがありません</p>
+            <p className="mt-2 text-sm text-blue-900 dark:text-blue-300">
+              まず「保留中」からレコードをブロックチェーンに登録し、その後ここで可視化できます。
+            </p>
+          </div>
+        ) : (
+          <LearningTreeView records={records} />
+        )}
       </div>
     </div>
   );
