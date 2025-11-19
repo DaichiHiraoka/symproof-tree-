@@ -23,8 +23,8 @@ export const SYMBOL_CONFIG = {
     // デッドライン（2時間）
     DEADLINE_HOURS: 2,
 
-    // 最大手数料（100 XYM）
-    MAX_FEE: 100_000000,
+    // 最大手数料（1 XYM = 1,000,000 μXYM）
+    MAX_FEE: 1_000000,
   },
 } as const;
 

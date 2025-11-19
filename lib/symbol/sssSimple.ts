@@ -134,8 +134,8 @@ export async function createAndSignTransferTransaction(
     const symbolTime = now - (config.epochAdjustment * 1000);
     console.log('🔍 [DEBUG] symbolTime (ms from Symbol epoch):', symbolTime);
 
-    // Deadline（Symbol時刻 + 2時間）
-    const deadline = BigInt(symbolTime + config.deadlineHours * 60 * 60 * 1000);
+    // Deadline（Symbol時刻 + 2時間）- BigIntで計算
+    const deadline = BigInt(symbolTime) + BigInt(config.deadlineHours * 60 * 60 * 1000);
     console.log('🔍 [DEBUG] deadline:', deadline);
 
     // メッセージをUint8Arrayに変換（プレーンメッセージ）

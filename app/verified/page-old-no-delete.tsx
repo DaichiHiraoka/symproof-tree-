@@ -3,19 +3,16 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ConfirmedRecord } from '@/types';
-import { getConfirmedRecords, removeConfirmedRecord } from '@/lib/storage/localStorage';
+import { getConfirmedRecords } from '@/lib/storage/localStorage';
 import RecordCardAtlaskit from '@/components/RecordCardAtlaskit';
 import { getValidatedConfig } from '@/lib/symbol/config';
-import { useFlag } from '@/components/FlagProvider';
 import Button from '@atlaskit/button';
 import Spinner from '@atlaskit/spinner';
 import SectionMessage from '@atlaskit/section-message';
 import Lozenge from '@atlaskit/lozenge';
-import Modal, { ModalTransition, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@atlaskit/modal-dialog';
 import { Box, Stack, Grid, Inline, xcss } from '@atlaskit/primitives';
 import EditorSearchIcon from '@atlaskit/icon/glyph/editor/search';
 import LinkIcon from '@atlaskit/icon/glyph/link';
-import TrashIcon from '@atlaskit/icon/glyph/trash';
 
 const pageContainerStyles = xcss({
   paddingBlock: 'space.400',
@@ -55,12 +52,6 @@ export default function VerifiedPageAtlaskit() {
     verified: 0,
     unverified: 0,
   });
-  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; record: ConfirmedRecord | null }>({
-    isOpen: false,
-    record: null,
-  });
-
-  const { showSuccess, showError } = useFlag();
 
   useEffect(() => {
     loadData();
@@ -82,32 +73,6 @@ export default function VerifiedPageAtlaskit() {
     const config = getValidatedConfig();
     const network = config.networkType === 152 ? 'testnet' : 'mainnet';
     return `https://${network}.symbol.fyi/transactions/${txHash}`;
-  };
-
-  const handleDeleteClick = (record: ConfirmedRecord) => {
-    setDeleteModal({ isOpen: true, record });
-  };
-
-  const handleDeleteConfirm = () => {
-    if (!deleteModal.record) return;
-
-    const success = removeConfirmedRecord(deleteModal.record.id);
-
-    if (success) {
-      showSuccess(
-        'レコード削除完了',
-        'UI上からレコードを削除しました。ブロックチェーン上の記録は保持されます。'
-      );
-      loadData();
-    } else {
-      showError('削除に失敗しました');
-    }
-
-    setDeleteModal({ isOpen: false, record: null });
-  };
-
-  const handleDeleteCancel = () => {
-    setDeleteModal({ isOpen: false, record: null });
   };
 
   if (isLoading) {
@@ -225,7 +190,7 @@ export default function VerifiedPageAtlaskit() {
                             appearance="primary"
                             iconBefore={<EditorSearchIcon label="Verify" />}
                           >
-                            検証
+                            検証ページで確認
                           </Button>
                         </Link>
 
@@ -241,14 +206,6 @@ export default function VerifiedPageAtlaskit() {
                             Explorer
                           </Button>
                         </a>
-
-                        <Button
-                          appearance="danger"
-                          onClick={() => handleDeleteClick(record)}
-                          iconBefore={<TrashIcon label="Delete" />}
-                        >
-                          削除
-                        </Button>
                       </Inline>
                     </Stack>
                   }
@@ -258,44 +215,6 @@ export default function VerifiedPageAtlaskit() {
           )}
         </Stack>
       </Box>
-
-      {/* 削除確認モーダル */}
-      <ModalTransition>
-        {deleteModal.isOpen && deleteModal.record && (
-          <Modal onClose={handleDeleteCancel}>
-            <ModalHeader>
-              <ModalTitle>レコード削除の確認</ModalTitle>
-            </ModalHeader>
-            <ModalBody>
-              <Stack space="space.200">
-                <p>
-                  <strong>{deleteModal.record.session.title}</strong> を削除してもよろしいですか？
-                </p>
-                <SectionMessage appearance="warning">
-                  <p style={{ fontSize: '14px' }}>
-                    <strong>注意:</strong> この操作はUI上の表示のみを削除します。
-                    ブロックチェーン上の記録は永続的に保持され、削除されません。
-                  </p>
-                </SectionMessage>
-                <div style={{ fontSize: '12px', color: '#6B778C' }}>
-                  <p>トランザクションハッシュ:</p>
-                  <code style={{ fontSize: '11px', wordBreak: 'break-all' }}>
-                    {deleteModal.record.transactionHash}
-                  </code>
-                </div>
-              </Stack>
-            </ModalBody>
-            <ModalFooter>
-              <Button appearance="subtle" onClick={handleDeleteCancel}>
-                キャンセル
-              </Button>
-              <Button appearance="danger" onClick={handleDeleteConfirm}>
-                削除
-              </Button>
-            </ModalFooter>
-          </Modal>
-        )}
-      </ModalTransition>
     </Box>
   );
 }

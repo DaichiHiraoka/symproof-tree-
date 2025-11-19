@@ -159,6 +159,29 @@ export function addConfirmedRecord(record: ConfirmedRecord): boolean {
 }
 
 /**
+ * 確定済みレコードを削除
+ * 注意: ブロックチェーン上の記録は削除されません。UI上の表示のみ削除されます。
+ */
+export function removeConfirmedRecord(recordId: string): boolean {
+  const records = getConfirmedRecords();
+  const filtered = records.filter(r => r.id !== recordId);
+  return saveConfirmedRecords(filtered);
+}
+
+/**
+ * 確定済みレコードを更新
+ */
+export function updateConfirmedRecord(recordId: string, updates: Partial<ConfirmedRecord>): boolean {
+  const records = getConfirmedRecords();
+  const index = records.findIndex(r => r.id === recordId);
+
+  if (index === -1) return false;
+
+  records[index] = { ...records[index], ...updates };
+  return saveConfirmedRecords(records);
+}
+
+/**
  * 最終同期時刻を取得
  */
 export function getLastSyncTimestamp(): number {

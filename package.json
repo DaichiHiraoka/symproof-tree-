@@ -19,6 +19,7 @@
     "@atlaskit/icon-object": "^7.3.2",
     "@atlaskit/inline-message": "^15.4.3",
     "@atlaskit/lozenge": "^13.1.0",
+    "@atlaskit/modal-dialog": "^14.6.2",
     "@atlaskit/page": "^14.0.1",
     "@atlaskit/page-header": "^12.1.11",
     "@atlaskit/primitives": "^16.1.1",
