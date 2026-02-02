@@ -11,22 +11,6 @@
 
 ---
 
-## 目次
-
-- [概要](#概要)
-- [主な機能](#主な機能)
-- [技術スタック](#技術スタック)
-- [セットアップ](#セットアップ)
-- [使用方法](#使用方法)
-- [アーキテクチャ](#アーキテクチャ)
-- [ディレクトリ構成](#ディレクトリ構成)
-- [デモシナリオ](#デモシナリオ)
-- [トラブルシューティング](#トラブルシューティング)
-- [今後の展望](#今後の展望)
-- [ライセンス](#ライセンス)
-
----
-
 ## 概要
 
 ### 背景
@@ -56,42 +40,39 @@
 
 ## 主な機能
 
-### 1. 学習記録の作成
+### 1. 学習活動の自動検出
 
-- ✅ 手動入力による学習記録の作成
-- ✅ タイトル、科目、学習時間、理解度、メモの入力
-- ✅ リアルタイムバリデーション
+- ブラウジングセッションからの学習活動自動検出（`lib/detection/`）
+- 検出された記録は保留中（Pending）として管理
+- モックデータによるデモ機能あり
 
 ### 2. ブロックチェーン登録
 
-- ✅ SSS Extension（Symbol Signer）との連携
-- ✅ TransferTransactionによる記録の永続化
-- ✅ トランザクションハッシュの自動取得
-- ✅ ブロック高の記録
+- SSS Extension（Symbol Signer）との連携（`lib/symbol/sssSimple.ts`）
+- TransferTransactionによる記録の永続化
+- トランザクションハッシュの自動取得
 
 ### 3. 記録の検証
 
-- ✅ トランザクションハッシュによる検証
-- ✅ Symbol REST APIからの情報取得
-- ✅ メッセージのデコードとJSON表示
-- ✅ Symbol Explorerへのリンク
+- トランザクションハッシュによるオンチェーン検証（`/verify`）
+- Symbol REST APIからの情報取得・メッセージデコード
+- Symbol Explorerへのリンク
 
-### 4. 確定済みレコード管理
+### 4. 学習ツリー可視化
 
-- ✅ 確定済みレコードの一覧表示
-- ✅ 統計情報（合計、検証済み、未検証）
-- ✅ 検証ページへのワンクリック遷移
+- React Flowによるインタラクティブなツリー表示（`/tree`）
+- **タイムラインレイアウト**: カテゴリ別の時系列表示
+- **極座標レイアウト**: 抽象度に基づく放射状表示（基礎→中心、専門→外周）
+- オントロジーベースの自動カテゴリ分類（JavaScript, React, Blockchain 等）
+- 抽象度推定（5段階、ルールベース＋Gemini API）
+- 類似度エッジ表示（TF-IDF + ルールベースのマルチシグナルスコアリング）
+- ズーム・パン・ノード詳細表示
 
-### 5. 学習ツリー可視化
+### 5. ダッシュボード
 
-- ✅ React Flowによるインタラクティブなツリー表示
-- ✅ ズーム・パン機能
-- ✅ ノードの詳細情報表示
-
-### 6. ポートフォリオ共有
-
-- ✅ 公開可能なポートフォリオURL
-- ✅ 学習統計のダッシュボード表示
+- 保留中・確定済みレコード数の統計表示（`/`）
+- 各機能へのクイックアクセス
+- 最近の記録一覧
 
 ---
 
@@ -103,7 +84,7 @@
 |------|-----------|------|
 | **Next.js** | 14 (App Router) | Reactフレームワーク |
 | **React** | 18 | UIライブラリ |
-| **TypeScript** | 5.0 | 型安全性 |
+| **TypeScript** | 5.x | 型安全性 |
 | **Tailwind CSS** | 3.4 | スタイリング |
 | **React Flow** | 11 | 学習ツリー可視化 |
 
@@ -114,6 +95,12 @@
 | **Symbol SDK v3** | トランザクション作成 |
 | **SSS Module** | SSS Extensionとの連携 |
 | **Symbol Testnet** | ブロックチェーンネットワーク |
+
+### AI / NLP
+
+| 技術 | 用途 |
+|------|------|
+| **Google Generative AI (Gemini)** | 抽象度推定のLLM検証、セマンティック類似度（オプション） |
 
 ### ストレージ
 
@@ -135,199 +122,44 @@
 
 ### インストール手順
 
-#### 1. リポジトリのクローン
-
 ```bash
-git clone https://github.com/your-username/symproof-tree.git
-cd symproof-tree
-```
+# 1. リポジトリのクローン
+git clone https://github.com/DaichiHiraoka/symproof-tree-.git
+cd symproof-tree-
 
-#### 2. 依存関係のインストール
-
-```bash
+# 2. 依存関係のインストール
 npm install
-```
 
-#### 3. 環境変数の設定
+# 3. 環境変数の設定
+cp .env.example .env.local
+# .env.local を編集:
+#   NEXT_PUBLIC_SYMBOL_NODE_URL - Symbol Testnetノード URL
+#   GOOGLE_AI_API_KEY - Google Gemini API キー（ツリー機能の抽象度推定に使用、オプション）
 
-`.env.local` ファイルを作成:
-
-```bash
-# Symbol Blockchain設定
-NEXT_PUBLIC_SYMBOL_NODE_URL=https://sym-test-03.opening-line.jp:3001
-NEXT_PUBLIC_SYMBOL_NETWORK_TYPE=152
-NEXT_PUBLIC_SYMBOL_GENERATION_HASH=49D6E1CE276A85B70EAFE52349AACCA389302E7A9754BCF1221E79494FC665A4
-NEXT_PUBLIC_SYMBOL_EPOCH_ADJUSTMENT=1667250467
-
-# トランザクション設定
-NEXT_PUBLIC_SYMBOL_MAX_FEE=100000
-NEXT_PUBLIC_SYMBOL_DEADLINE_HOURS=2
-
-# アプリケーション設定
-NEXT_PUBLIC_APP_NAME=symproof-tree
-```
-
-#### 4. SSS Extensionのインストール
-
-1. Chromeウェブストアから「SSS Extension」をインストール
-2. 拡張機能を開き、新規アカウントを作成またはインポート
-3. ネットワークを「Testnet」に切り替え
-4. Faucetからテストネット用XYMを取得:
-   - https://testnet.symbol.tools/
-
-#### 5. 開発サーバーの起動
-
-```bash
+# 4. 開発サーバーの起動
 npm run dev
 ```
 
 ブラウザで http://localhost:3000 にアクセス
 
----
+### SSS Extensionの準備
 
-## 使用方法
-
-### 基本的なワークフロー
-
-#### 1. 学習記録の作成
-
-1. ホームページ（`/`）にアクセス
-2. 学習記録フォームに以下を入力:
-   - **タイトル**: 学習内容の簡潔な説明（例: "React Hooksの学習"）
-   - **科目**: カテゴリ（例: "プログラミング"）
-   - **学習時間**: 分単位（例: 90）
-   - **理解度**: 1～5の5段階
-   - **メモ**: 詳細な記録（任意）
-3. 「保存」ボタンをクリック
-4. レコードが「保留中」タブに表示される
-
-#### 2. ブロックチェーンへの登録
-
-1. 「保留中」ページ（`/pending`）に移動
-2. 登録したいレコードの「ブロックチェーンに登録」ボタンをクリック
-3. SSS Extensionのポップアップで以下を確認:
-   - 受信者アドレス（自分自身）
-   - メッセージ内容（学習記録のJSON）
-   - 手数料
-4. 「承認」ボタンをクリックして署名
-5. トランザクションが送信される
-6. 約30秒後、ブロックで承認される
-7. レコードが「確定済み」タブに移動
-
-#### 3. 記録の検証
-
-##### 方法A: 確定済みページから
-
-1. 「確定済み」ページ（`/verified`）に移動
-2. 検証したいレコードの「検証ページで確認」ボタンをクリック
-3. 自動的に検証が実行され、結果が表示される
-
-##### 方法B: 直接入力
-
-1. 「検証」ページ（`/verify`）に移動
-2. トランザクションハッシュ（64文字の16進数）を入力
-3. 「検証する」ボタンをクリック
-4. 検証結果が表示:
-   - ✅ 成功: 緑色のバナー、トランザクション詳細表示
-   - ✗ 失敗: 赤色のバナー、エラーメッセージ表示
-
-#### 4. 学習ツリーの表示
-
-1. 「学習ツリー」ページ（`/tree`）に移動
-2. 確定済みレコードが階層構造で表示される
-3. マウスでドラッグしてパン
-4. マウスホイールでズーム
-5. ノードをクリックして詳細情報を表示
-
-#### 5. ポートフォリオの共有
-
-1. 「ポートフォリオ」ページ（`/portfolio/[address]`）にアクセス
-2. URLを企業や友人に共有
-3. 統計情報と学習ツリーが表示される
+1. Chromeウェブストアから「SSS Extension」をインストール
+2. 拡張機能を開き、新規アカウントを作成またはインポート
+3. ネットワークを「Testnet」に切り替え
+4. [Faucet](https://testnet.symbol.tools/) からテストネット用XYMを取得
 
 ---
 
-## アーキテクチャ
+## ページ構成
 
-### システム構成図
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                     ブラウザ                              │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │         Next.js App (React + TypeScript)         │   │
-│  │                                                   │   │
-│  │  ┌─────────────┐  ┌──────────────┐  ┌────────┐ │   │
-│  │  │   UI Layer  │  │ Business     │  │Storage │ │   │
-│  │  │  (Pages &   │→ │   Logic      │→ │ Local  │ │   │
-│  │  │ Components) │  │ (lib/)       │  │Storage │ │   │
-│  │  └─────────────┘  └──────────────┘  └────────┘ │   │
-│  │                           ↓                      │   │
-│  │                    ┌──────────────┐             │   │
-│  │                    │ Symbol SDK   │             │   │
-│  │                    │ SSS Module   │             │   │
-│  │                    └──────────────┘             │   │
-│  └───────────────────────────│───────────────────────┘│
-│                              ↓                          │
-│                    ┌──────────────────┐                │
-│                    │  SSS Extension   │                │
-│                    │  (署名処理)       │                │
-│                    └──────────────────┘                │
-└─────────────────────────────│───────────────────────────┘
-                              ↓
-                   ┌──────────────────────┐
-                   │  Symbol Testnet      │
-                   │  REST API Node       │
-                   │  (sym-test-03...)    │
-                   └──────────────────────┘
-                              ↓
-                   ┌──────────────────────┐
-                   │  Symbol Blockchain   │
-                   │  (Distributed Ledger)│
-                   └──────────────────────┘
-```
-
-### データフロー
-
-#### 記録作成 → ブロックチェーン登録
-
-```
-1. ユーザー入力
-   ↓
-2. バリデーション (クライアント)
-   ↓
-3. PendingRecord作成 (LocalStorage)
-   ↓
-4. ユーザーが「登録」をクリック
-   ↓
-5. TransferTransaction作成 (Symbol SDK)
-   ↓
-6. SSS Extensionで署名
-   ↓
-7. トランザクション送信 (REST API)
-   ↓
-8. ブロック承認待機 (~30秒)
-   ↓
-9. ConfirmedRecord作成 (LocalStorage)
-```
-
-#### トランザクション検証
-
-```
-1. トランザクションハッシュ入力
-   ↓
-2. バリデーション (64文字16進数)
-   ↓
-3. REST API GET /transactions/confirmed/{hash}
-   ↓
-4. レスポンス取得 (JSON)
-   ↓
-5. メッセージデコード (16進数→UTF-8→JSON)
-   ↓
-6. Symbol時刻変換 (Epoch→Date)
-   ↓
-7. 検証結果表示
-```
+| パス | 機能 |
+|------|------|
+| `/` | ダッシュボード（統計・クイックアクション・最近の記録） |
+| `/pending` | 保留中レコード一覧・ブロックチェーン登録 |
+| `/verified` | 確定済みレコード一覧 |
+| `/verify` | トランザクションハッシュによる検証 |
+| `/tree` | 学習ツリー可視化（タイムライン/極座標レイアウト） |
 
 ---
 
@@ -335,62 +167,57 @@ npm run dev
 
 ```
 symproof-tree/
-├── app/                           # Next.js App Routerページ
-│   ├── page.tsx                   # ホームページ（学習記録作成）
-│   ├── pending/                   # 保留中レコード
-│   │   └── page.tsx
-│   ├── verified/                  # 確定済みレコード
-│   │   └── page.tsx
-│   ├── verify/                    # 検証ページ
-│   │   └── page.tsx
-│   ├── tree/                      # 学習ツリー可視化
-│   │   └── page.tsx
-│   ├── portfolio/                 # ポートフォリオ共有
-│   │   └── [id]/
-│   │       └── page.tsx
-│   ├── api/                       # API Routes (未使用)
-│   ├── layout.tsx                 # ルートレイアウト
-│   └── globals.css                # グローバルスタイル
+├── app/                              # Next.js App Routerページ
+│   ├── page.tsx                      # ダッシュボード
+│   ├── pending/page.tsx              # 保留中レコード
+│   ├── verified/page.tsx             # 確定済みレコード
+│   ├── verify/page.tsx               # 検証ページ
+│   ├── tree/page.tsx                 # 学習ツリー可視化
+│   ├── layout.tsx                    # ルートレイアウト
+│   └── globals.css                   # グローバルスタイル
 │
-├── components/                    # Reactコンポーネント
-│   ├── Navigation.tsx             # ナビゲーションヘッダー
-│   ├── RecordList.tsx             # レコード一覧（汎用）
-│   ├── LearningRecordForm.tsx     # 学習記録入力フォーム
-│   └── LearningTreeView.tsx       # 学習ツリー表示
+├── components/                       # Reactコンポーネント
+│   ├── Navigation.tsx                # ナビゲーションヘッダー
+│   ├── RecordCard.tsx                # レコードカード表示
+│   ├── RecordList.tsx                # レコード一覧（汎用）
+│   └── LearningTree/                # 学習ツリー関連
+│       ├── LearningTreeView.tsx      # ツリーメインビュー
+│       ├── LearningRecordNode.tsx    # カスタムノード
+│       └── CategorySelector.tsx      # カテゴリ選択（極座標用）
 │
-├── lib/                           # ビジネスロジック
-│   ├── symbol/                    # Symbol関連
-│   │   ├── config.ts              # 設定管理
-│   │   ├── sssSimple.ts           # SSS Extension連携
-│   │   └── verify.ts              # トランザクション検証
-│   └── storage/                   # ストレージ管理
-│       └── localStorage.ts        # LocalStorage操作
+├── lib/                              # ビジネスロジック
+│   ├── symbol/                       # Symbol Blockchain連携
+│   │   ├── config.ts                 # ネットワーク設定
+│   │   ├── facade.ts                 # 簡易インターフェース
+│   │   ├── sssSimple.ts             # SSS Extension連携
+│   │   ├── verify.ts                 # トランザクション検証
+│   │   └── workflowSimple.ts        # 登録ワークフロー
+│   ├── detection/                    # 学習活動検出
+│   │   ├── autoDetect.ts            # 自動検出（モックデータ読込）
+│   │   └── pendingRecords.ts        # 保留中レコード管理
+│   ├── tree/                         # ツリー構築ロジック
+│   │   ├── ontology.ts              # ドメイン語彙・カテゴリ定義
+│   │   ├── abstractionEstimator.ts  # 抽象度推定（5段階）
+│   │   ├── similarityScorer.ts      # 類似度スコアリング
+│   │   ├── treeLayout.ts            # タイムラインレイアウト
+│   │   ├── polarLayout.ts           # 極座標レイアウト
+│   │   └── treeConverter.ts         # React Flow形式変換
+│   ├── ai/                           # AI連携
+│   │   └── geminiClient.ts          # Google Gemini APIクライアント
+│   ├── storage/                      # ストレージ管理
+│   │   └── localStorage.ts          # LocalStorage操作
+│   └── utils/                        # ユーティリティ
+│       └── hash.ts                   # ハッシュ生成
 │
-├── types/                         # TypeScript型定義
-│   └── index.ts                   # 共通型
-│
-├── constants/                     # 定数定義
-│   └── index.ts                   # エラーコード、メッセージ
-│
-├── docs/                          # ドキュメント
-│   ├── SPEC.md                    # プロジェクト仕様書
-│   ├── tests/                     # テスト手順書
-│   │   ├── phase-3-transaction-test.md
-│   │   └── phase-4-verification-test.md
-│   └── logs/                      # 実装ログ
-│       ├── phase-3-debugging-log.md
-│       └── phase-4-implementation-log.md
-│
-├── public/                        # 静的ファイル
-│
-├── .env.local                     # 環境変数（Git管理外）
-├── .env.example                   # 環境変数テンプレート
-├── next.config.js                 # Next.js設定
-├── tailwind.config.ts             # Tailwind CSS設定
-├── tsconfig.json                  # TypeScript設定
-├── package.json                   # npm依存関係
-└── README.md                      # このファイル
+├── types/index.ts                    # TypeScript型定義
+├── constants/index.ts                # 定数定義
+├── public/mock/                      # モックデータ（デモ用）
+├── docs/                             # ドキュメント
+└── .env.example                      # 環境変数テンプレート
 ```
 
 ---
 
+## ライセンス
+
+MIT License
